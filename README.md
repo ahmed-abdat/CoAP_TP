@@ -2,6 +2,41 @@
 
 Ce projet contient l'implémentation d'un serveur CoAP et plusieurs clients pour démontrer les différents aspects du protocole CoAP (Constrained Application Protocol).
 
+## 🔧 Installation du Projet
+
+1. Clonez le dépôt :
+
+```bash
+git clone https://github.com/ahmed-abdat/CoAP_TP.git
+cd CoAP_TP
+```
+
+2. Créez un environnement virtuel :
+
+```bash
+python -m venv venv
+```
+
+3. Activez l'environnement virtuel :
+
+- Sous Windows :
+
+```bash
+venv\Scripts\activate
+```
+
+- Sous Linux/MacOS :
+
+```bash
+source venv/bin/activate
+```
+
+4. Installez les dépendances :
+
+```bash
+pip install aiocoap
+```
+
 ## 📋 Prérequis
 
 - Python 3.x
