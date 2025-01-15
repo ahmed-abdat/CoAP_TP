@@ -1,0 +1,139 @@
+P3- Protocole CoAP
+
+Les programmes se trouvent dans le répertoire pycom pour l'objet et plido-tp4 pour le serveur.
+
+Mise en œuvre de GET
+
+Nous allons mettre en œuvre le protocole CoAP entre deux processus sur votre machine. Côté
+objet, nous allons utiliser une mise en œuvre simple mais compacte du protocole pour comprendre
+son fonctionnement. À l’autre extrémité, nous utiliserons la mise en œuvre aiocoap qui est
+très complète mais beaucoup plus complexe et demandant plus de ressources.
+
+aiocoap met en œuvre CoAP, avec les modules asynchronous Input/Output, permettant un fort
+degré de parallélisme. Le programme (coap_basic_server1.py) donne un exemple d’un serveur
+simple gérant une seule ressource time. (afficher le programme pour consultation)
+
+- L’utilisation de aoicoap se traduit par l’importation des modules qui se trouvent dans le
+répertoire aoicoap.
+- Dans la fonction main le programme cherche son adresse IP fixe et le numéro de port à la
+valeur affectée à CoAP (5683). L’utilisation d’une adresse IP et non du
+joker 0.0.0.0 permet de faire tourner le serveur dans un environnement Windows et MAC.
+- La variable root contient l’arbre des ressources. À la ligne suivante, la ressource time est
+associée à une classe TimeResource.
+- La méthode
+asyncio.Task(aiocoap.Context.create_server_context(root, bind=(ip_addr, port))) permet
+de lier cet arbre de ressource à l’adresse IP et au numéro de port précédemment défini. Le
+serveur est ensuite lancé dans une boucle sans fin.
+- Il est plus intéressant de voir le traitement effectué lorsque la ressource est appelée par le
+serveur. La classe TimeResource dérivant de la classe générique aiocoap Resource est
+utilisée : class TimeResource(resource.Resource) :
+- Pour chaque méthode CoAP, une méthode peut être définie. Dans l’exemple, la
+méthode render_get permet de traiter les requêtes GET. Pour simuler un temps de
+traitement, le programme commence par attendre 5 secondes puis construit la chaîne de
+caractères contenant la date qu’il va retourner dans un objet aoicoap Message.
+- Ainsi, si tout se passe correctement, la réponse à une requête (Code = 0x01)
+sera 2.05 (Content).
+
+
+Lancez le programme coap_basic_server1.py
+
+Messages vides (regardez la vidéo TP CoAP empty : flux de la classroom)
+
+Du coté du client, nous allons utiliser une mise en œuvre plus compacte qui nous permettra
+d’expérimenter le fonctionnement de CoAP en modifiant les valeurs des champs protocolaires.
+
+Afficher le programme coap_empty_msg.py
+
+Dans un premier temps, vous devez remplacer l’adresse IP par celle fournie par votre serveur
+CoAP. Le programme crée une socket UDP au travers de laquelle l’échange avec le serveur sera
+effectué. La première action consiste à créer un message CoAP (ligne 9 du programme) et à la
+ligne suivante créer un en-tête obligatoire.
+
+Le programme affiche le message et l’envoie sur la socket. La ligne 13 permet de limiter l’attente
+de la réponse à 10 secondes. Cette réponse est attendue ligne 16, transformée en message CoAP
+ligne suivante et affichée.
+
+Lancez une capture Wireshark pour voir le trafic passant sur le port de CoAP
+(udp.port==5683 dans la fenêtre de filtrage).
+
+Lancez maintenant le programme client.
+
+Observez le résultat et les messages qui circulent sur le réseau.
+
+On retrouve dans le contenu des messages UDP, le message CoAP donné par l’application. Si
+l’on prend le deuxième message, il commence par 0x70 ; ce qui correspond en binaire
+à 0b01_11_0000, soit version = 1, type = 3 et longueur du token = 0. L’octet suivant donne le
+code 0 (Empty) et les deux derniers octets contiennent le message ID. Le serveur ne sachant pas
+quoi faire de la requête, le rejette en envoyant un message Reset pour essayer d’arrêter le code
+sur le client qui envoie ce genre de requête.
+
+
+GET /time
+
+Nous laissons tourner le serveur CoAP et nous allons construire la requête CoAP du client pour
+qu'il demande la ressource /time. (Travaillez sur le programme coap_get_time1.py).
+N'oubliez pas de mettre la bonne adresse IP du SERVER dans ce programme.
+• la méthode new_header() précise le code, ici GET ;
+• et on ajoute l'élément d'URI time en option.
+
+Côté client, lancez le programme coap_get_time1.py
+Observez le résultat :
+- La requête CoAP commence par le mot 40010001, indiquant un message CONfirmable,
+sans Token, un code GET et un MID de 0x0001, suivi de l'option Uri-Path.
+- La réponse est un ACK du MID et le code est vide (0.00).
+- On n'obtient pas la réponse au GET, juste un acquittement. Pourtant, les log du serveur et
+l'analyse du réseau montrent bien que le serveur a répondu.
+1208 169459.08455192.168.1.79           192.168.1.79    COAP    51 CON, MID:1, GET, /time
+1209 169459.1876: 192.168.1.79          192.168.1.79    COAP    46 ACK, MID:1, Empty Message
+1210 169464.09336 192.168.1.79          192.168.1.79    COAP    63 CON, MID:19224, 2.05 Content
+1211 169464.0933: 192.168.1.79          192.168.1.79    ICMP    91 Destination unreachable (Port unreachable)
+
+
+Explication : Comme nous avons ajouté un délai de 5 secondes avant de répondre sur le serveur
+CoAP dans la fonction render_get(), le serveur acquitte la requête et cherche 5 secondes plus tard
+à envoyer une nouvelle requête confirmée. Mais le client, ayant fermé sa socket, ne peut plus la
+recevoir et retourne une erreur ICMP.
+
+
+La solution est d'attendre un second message et de le décoder (programme
+coap_get_time2.py) N’oubliez pas de changer l'adresse IP du serveur !!!!!!!!!!
+
+Côté client, lancez le programme coap_get_time2.py
+Résultat : Y a une réponse !! mais si vous regardez plus attentivement le trafic sur le réseau vous
+allez trouver encore une fois une erreur ICMP !!
+1299 170334.4503: 192.168.1.79            192.168.1.79    COAP    51 CON, MID:1, GET, /time
+1300 170334.55455 192.168.1.7.79          192.168.1.79    COAP    46 ACK, MID:1, Empty Message
+1307 170339.45996192.168.1.79             192.168.1.79    COAP    63 CON, MID:9992, 2.05 Content
+1308 170342.29836 192.168.1.79            192.168.1.79    COAP    63 CON, MID:9992, 2.05 Content
+1309 170342.2983: 192.18.1.79             192.168.1.79    ICMP    91 Destination unreachable (Port unreachable)
+
+Explication : on voit que la réponse a été émise deux fois et que l'on retrouve ensuite une erreur
+ICMP. Cela est dû au fait que l'on n'acquitte pas le message venant du serveur. Le croyant perdu,
+il le retransmet et tombe sur une socket inexistante.
+
+La solution est de fournir un acquittement au serveur avec le code de client coap_get_time3.py
+Côté client, lancez le programme coap_get_time3.py
+L’exécution est parfaite si vous n’avez pas oublié de changer l’adresse IP du serveur !!
+
+
+Ajout d’un Tocken :
+
+Enfin, on peut ajouter un token pour lier les deux transactions. Ici, il n'y a pas d’ambiguïté car nous
+ne demandons qu'une seule ressource. Mais si nous demandions plusieurs ressources
+simultanément, il faudrait pouvoir associer la réponse à la requête. Le programme
+coap_get_time4.py ajoute lors de la création de l'en-tête un champ token.
+
+Côté client, lancez le programme coap_get_time4.py
+Résultat : L'échange est le même mais le token est répété dans la réponse.
+
+
+Questions :
+1- Que se passe-t-il si vous utilisez une requête non confirmable pour demander la
+
+ressource /time (mettre l'argument type=CoAP.NON dans la construction de l'en-
+tête obligatoire).
+
+2- Modifiez le programme du serveur pour supprimer le délai de 5 secondes avant une
+réponse.
+- Que se passe-t-il quand le client envoie une requête CONfirmable ?
+- Que se passe-t-il quand le client envoie une requête NON confirmable?
